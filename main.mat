@@ -1,0 +1,352 @@
+clear; close all;
+
+%% 0. Initialize Parameters
+L = 1200; % Length of bridge
+n = 1200; % Discretize into 1 mm seg.
+P = 400; % Total weight of train [N]
+x = linspace(0, L, n+1); % x-axis
+x_start = 0;
+
+%% 1. SFD, BMD under train loading
+x_train = [52 228 392 568 732 908]; % Train Load Locations
+P_train = [1 1 1 1 1 1] * P/6;
+n_train = 240; % num of train locations → 1200 - 960 = 240
+SFDi = zeros(n_train, n); % 1 SFD for each train loc.
+BMDi = zeros(n_train, n); % 1 BMD for each train loc.
+sM = 0
+posSM = 0
+mM = 0
+posMM = 0
+
+% Solve for SFD and BMD with the train at different locations
+for pos = 1:n_train+1
+   x_train = x_train - x_start;
+   x_start = pos-1;
+   x_train = x_train + x_start;
+   %sum of moments
+   by = (x_train(1)*P_train(1) + x_train(2)*P_train(2) + x_train(3)*P_train(3) + x_train(4)*P_train(4) + x_train(5)*P_train(5) + x_train(6)*P_train(6))/1200;
+   %sum of Fy
+   ay = P - by;
+  
+   %loads
+   w = [ay, -P_train(1), -P_train(2), -P_train(3), -P_train(4), -P_train(5), -P_train(6), by];
+   shear = zeros(1,8);
+   shearSum = 0;
+  
+   keyPoints = [0, x_train(1), x_train(2), x_train(3), x_train(4), x_train(5), x_train(6), L];
+  
+   %SFD
+   for i = 1:8
+       shearSum = shearSum + w(i);
+       shear(i) = shearSum;
+       SFDi(pos, keyPoints(i)+1) = shear(i);
+   end
+  
+   for i = 1:7
+       for j = keyPoints(i)+1:keyPoints(i+1)
+           SFDi(pos, j) = shear(i);
+       end
+   end
+  
+   %BMD
+   %moments
+   moment = zeros(1,8);
+   momentSum = 0;
+   inc = 0;
+  
+   for i = 1:7
+       momentSum = momentSum + shear(i)*(keyPoints(i+1)-keyPoints(i));
+       moment(i+1) = momentSum;
+       BMDi(pos, keyPoints(i+1)) = moment(i+1);
+   end
+   moment(1) = 0;
+   moment(8) = 0;
+  
+   for i = 1:7
+       inc = (moment(i+1)-moment(i))/(keyPoints(i+1)-keyPoints(i));
+       for j = keyPoints(i)+1:keyPoints(i+1)
+           BMDi(pos, j+1) = BMDi(pos, j) + inc;
+       end
+   end
+   if(max(SFDi(pos,:)) > sM)
+       sM = max(SFDi(pos,:));
+       posSM = pos;
+   end
+   if(max(BMDi(pos,:)) > mM)
+       mM = max(BMDi(pos,:));
+       posMM = pos;
+   end
+   subplot(2,1,1)
+   hold on ;
+   p = plot (0:L, SFDi(pos,:), "g", "LineWidth", 1)
+   p.Annotation.LegendInformation.IconDisplayStyle = 'off';
+   xlabel ("Length")
+   ylabel ("Shear Force")
+   title ("SFD")
+  
+  
+   subplot(2,1,2)
+   hold on ;
+   set(gca, 'YDir','reverse')
+   p = plot (0:L, BMDi(pos,:), "g", "LineWidth", 1)
+   p.Annotation.LegendInformation.IconDisplayStyle = 'off';
+   xlabel ("Length")
+   ylabel ("Internal Bending Moment")
+   title ("BMD")
+end
+hold off;
+
+SFD = max(abs(SFDi));                          
+BMD = max(BMDi);
+vMax = max(SFD)
+mMax = max(BMD)
+
+subplot(2,1,1)
+hold on ;
+plot (0:L, SFDi(1,:), "g", "LineWidth", 1)
+plot (0:L, SFD, "r", "LineWidth", 3)
+xlabel ("Length")
+ylabel ("Shear Force")
+title ("SFD")
+legend ("Shear Force", "Max Shear")
+hold off
+
+subplot(2,1,2)
+hold on ;
+set(gca, 'YDir','reverse')
+plot (0:L, BMDi(1,:), "g", "LineWidth", 1)
+plot (0:L, BMD, "r", "LineWidth", 3)
+xlabel ("Length")
+ylabel ("Internal Bending Moment")
+title ("BMD")
+legend ("Moment", "Max Moment")
+hold off
+
+%% 2. Define Bridge Parameters
+xc = 0 %x_c Location, x, of cross-section change
+thick = 1.27 %Thickness of Board
+tfw = 100 %tfw = Top Flange Width
+tfh = thick*2 %tfh = Top Flange Height
+ovh = 5 %ovh Overhang
+gsw = 6 %gsw = Glue Surfce Width
+gsh = thick %gsh = Glue Surface Height
+ww = thick %ww = Web Width
+wh = 128.54-thick*2 %wh = Web Height
+bsw = 80 %bsw = Bottom Support Width
+bsh = thick %bsh = Bottom Support Height
+
+% = xc, tfw, tfh, gsw, gsh, ww, wh, bsw, bsh
+param = [0, tfw, tfh, gsw, gsh, ww, wh, bsw, bsh
+        400, tfw, tfh, gsw, gsh, ww, wh, bsw, bsh
+        800, tfw, tfh, gsw, gsh, ww, wh, bsw, bsh
+        L, tfw, tfh, gsw, gsh, ww, wh, bsw, bsh]
+
+%% 3. Calculate Sectional Properties
+%Areas
+Atop = tfw*tfh
+Aglue = gsw*gsh
+Aweb = ww*wh
+Abot = bsw*bsh
+
+%Local Centroidal Axes Relative to Bottom
+Ctop = (tfh/2)+gsh+wh+bsh
+Cglue = (gsh/2)+wh+bsh
+Cweb = (wh/2)+bsh
+Cbot = (bsh/2)
+
+% ybar. location of centroidal axis from the bottom
+ybar = (Atop*Ctop + 2*(Aglue*Cglue) + 2*(Aweb*Cweb) + Abot*Cbot)/(Atop+(2*Aglue)+(2*Aweb)+Abot)
+ybot = ybar
+ytop = (tfh+gsh+wh+bsh)-ybar
+
+%Is
+Itop = (tfw*(tfh)^3)/12
+Iglue = (gsw*(gsh)^3)/12
+Iweb = (ww*(wh)^3)/12
+Ibot = (bsw*(bsh)^3)/12
+
+% I
+I = Itop + (2*Iglue) + (2*Iweb) + Ibot + Atop*(ybar-Ctop)^2 + 2*(Aglue*(ybar-Cglue)^2) + 2*(Aweb*(ybar-Cweb)^2) + Abot*(ybar-Cbot)^2
+
+% Q at centroidal axes
+Qcent = 2*(ybar-bsh)*ww*(ybar-(((ybar-bsh)/2)+bsh))+(Abot*(ybar-Cbot))
+
+% Q at glue location
+Qglue = tfh*tfw*(Ctop-ybar)
+
+%% 4. Calculate Applied Stress
+S_top = zeros(1, n+1);
+S_bot = zeros(1, n+1);
+T_cent = zeros(1, n+1);
+T_glue = zeros(1, n+1);
+
+for pos = 1:n+1
+   S_top(pos) = ((BMD(pos))*ytop)/I;
+   S_bot(pos) = ((BMD(pos))*ybot)/I;
+   T_cent(pos) = ((SFD(pos))*Qcent)/(I*2*ww);
+   T_glue(pos) = ((SFD(pos))*Qglue)/(I*2*(gsw-thick));
+end
+
+%% 5. Material and Thin Plate Buckling Capacities
+E = 4000;
+mu = 0.2;
+S_tens = 30
+S_comp = 6
+T_max = 4
+T_gmax = 2
+
+%Case 1: Thin Plate Buckling at Top
+k = 4
+t = tfh
+b = tfw-20-ww
+S_buck1 = (k*(pi^2)*E)/(12*(1-(mu^2)))*(t/b)^2
+
+%Case 2: Buckling of Free Edge of Flange
+k = 0.425
+t = tfh
+b = 10 + (ww/2)
+S_buck2 = (k*(pi^2)*E)/(12*(1-(mu^2)))*(t/b)^2
+
+%Case 3:Buckling of Web Due to Flexural Stress
+k = 6
+t = ww
+b = wh/2
+S_buck3 = (k*(pi^2)*E)/(12*(1-(mu^2)))*(t/b)^2
+
+%Case 4: Buckling of Web Due to Shear
+k = 5
+t = ww
+b = wh
+a = 120
+T_buck = (k*(pi^2)*E)/(12*(1-(mu^2)))*((t/b)^2+(t/a)^2)
+
+%% 6. FOS
+FOS_tens = zeros(1, n+1);
+FOS_comp = zeros(1, n+1);
+FOS_shear = zeros(1, n+1);
+FOS_glue = zeros(1, n+1);
+FOS_buck1 = zeros(1, n+1);
+FOS_buck2 = zeros(1, n+1);
+FOS_buck3 = zeros(1, n+1);
+FOS_buckV = zeros(1, n+1);
+
+for pos = 1:n+1
+   FOS_tens(pos) = S_tens/S_bot(pos);
+   FOS_comp(pos) = S_comp/S_top(pos);
+   FOS_shear(pos) = T_max/T_cent(pos);
+   FOS_glue(pos) = T_gmax/T_glue(pos);
+   FOS_buck1(pos) = S_buck1/S_top(pos);
+   FOS_buck2(pos) = S_buck2/S_top(pos);
+   FOS_buck3(pos) = S_buck3/S_top(pos);
+   FOS_buckV(pos) = T_buck/T_cent(pos);
+end
+
+%% 7. Min FOS and the failure load Pfail
+AllFOS = [FOS_tens, FOS_comp, FOS_shear, FOS_glue, FOS_buck1, FOS_buck2, FOS_buck3, FOS_buckV];
+minFOSTens = min(FOS_tens)
+minFOSComp = min(FOS_comp)
+minFOSShear = min(FOS_shear)
+minFOSGlue = min(FOS_glue)
+minFOSBuck1 = min(FOS_buck1)
+minFOSBuck2 = min(FOS_buck2)
+minFOSBuck3 = min(FOS_buck3)
+minFOSBuckV = min(FOS_buckV)
+minFOS = min(AllFOS);
+Pf = minFOS*P;
+
+%% 8. Vfail and Mfail
+Mf_tens = zeros(1, n+1);
+Mf_comp = zeros(1, n+1);
+Vf_shear = zeros(1, n+1);
+Vf_glue = zeros(1, n+1);
+Mf_buck1 = zeros(1, n+1);
+Mf_buck2 = zeros(1, n+1);
+Mf_buck3 = zeros(1, n+1);
+Vf_buckV = zeros(1, n+1);
+
+for pos = 1:n+1
+   Mf_tens(pos) = FOS_tens(pos)*BMD(pos);
+   Mf_comp(pos) = FOS_comp(pos)*BMD(pos);
+   Vf_shear(pos) = FOS_shear(pos)*SFD(pos);
+   Vf_glue(pos) = FOS_glue(pos)*SFD(pos);
+   Mf_buck1(pos) = FOS_buck1(pos)*BMD(pos);
+   Mf_buck2(pos) = FOS_buck2(pos)*BMD(pos);
+   Mf_buck3(pos) = FOS_buck3(pos)*BMD(pos);
+   Vf_buckV(pos) = FOS_buckV(pos)*SFD(pos);
+end
+
+%% 9. Output plots of Vfail and Mfail
+subplot(2,3,1)
+set(gcf,'position',[300,50,1000,700])
+hold on; grid on; grid minor;
+xlim([0,1200])
+plot(x, Vf_shear, 'r', 'LineWidth', 2)
+plot(x, SFD, 'k', 'LineWidth', 1);
+plot(x, Vf_shear, 'r', 'LineWidth', 2)
+plot([0, L], [0, 0], 'k', 'LineWidth', 2)
+legend('Matboard Shear Failure', "Shear Force Envelope")
+xlabel('Distance along bridge (mm)')
+ylabel('Shear Force (N)')
+
+subplot(2,3,2)
+hold on; grid on; grid minor;
+xlim([0,1200])
+plot(x, Vf_glue, 'r', 'LineWidth', 2)
+plot(x, SFD, 'k', 'LineWidth', 1);
+plot(x, Vf_glue, 'r', 'LineWidth', 2)
+plot([0, L], [0, 0], 'k', 'LineWidth', 2)
+legend('Glue Shear Failure', "Shear Force Envelope")
+xlabel('Distance along bridge (mm)')
+ylabel('Shear Force (N)')
+
+subplot(2,3,3)
+hold on; grid on; grid minor;
+xlim([0,1200])
+plot(x, Vf_buckV, 'r', 'LineWidth', 2)
+plot(x, SFD, 'k', 'LineWidth', 1);
+plot(x, Vf_buckV, 'r', 'LineWidth', 2)
+plot([0, L], [0, 0], 'k', 'LineWidth', 2)
+legend('Matboard Shear Buckling Failure', "Shear Force Envelope")
+xlabel('Distance along bridge (mm)')
+ylabel('Shear Force (N)')
+
+subplot(2,3,4)
+hold on; grid on; grid minor;
+xlim([0,1200])
+set(gca, 'YDir','reverse')
+plot(x, Mf_comp, 'r', 'LineWidth', 2)
+plot(x, Mf_tens, 'b', 'LineWidth', 2)
+plot(x, BMD, 'k', 'LineWidth', 1);
+plot(x, Mf_comp, 'r', 'LineWidth', 2)
+plot(x, Mf_tens, 'b', 'LineWidth', 2)
+plot([0, L], [0, 0], 'k', 'LineWidth', 2)
+legend('Matboard Compression Failure', 'Matboard Tension Failure', "Bending Moment Envelope")
+xlabel('Distance along bridge (mm)')
+ylabel('Bending Moment(Nmm)')
+
+subplot(2,3,5)
+hold on; grid on; grid minor;
+xlim([0,1200])
+set(gca, 'YDir','reverse')
+plot(x, Mf_buck1, 'r', 'LineWidth', 2)
+plot(x, Mf_buck2, 'b', 'LineWidth', 2)
+plot(x, BMD, 'k', 'LineWidth', 1);
+plot(x, Mf_buck1, 'r', 'LineWidth', 2)
+plot(x, Mf_buck2, 'b', 'LineWidth', 2)
+plot([0, L], [0, 0], 'k', 'LineWidth', 2)
+legend('Matboard Buckling Failure Top Flange Mid', 'Matboard Buckling Failure Top Flange Sides', "Bending Moment Envelope")
+xlabel('Distance along bridge (mm)')
+ylabel('Bending Moment(Nmm)')
+
+subplot(2,3,6)
+hold on; grid on; grid minor;
+xlim([0,1200])
+set(gca, 'YDir','reverse')
+plot(x, Mf_buck3, 'r', 'LineWidth', 2)
+plot(x, BMD, 'k', 'LineWidth', 1);
+plot(x, Mf_buck3, 'r', 'LineWidth', 2)
+plot([0, L], [0, 0], 'k', 'LineWidth', 2)
+legend('Matboard Web Buckling Failure', "Bending Moment Envelope")
+xlabel('Distance along bridge (mm)')
+ylabel('Bending Moment(Nmm)')
+hold off;
