@@ -2,7 +2,7 @@
 
 ## 🏗️ Project Overview
 
-The CIV102 bridge contest is a cherished EngSci tradition that challenges first-year students to apply fundamental civil engineering principles to design and build a **box girder bridge** using matboard and contact cement. Our goal was to maximize strength-to-weight ratio and withstand the highest possible load under realistic failure constraints.
+The CIV102 bridge contest is a cherished EngSci tradition that challenges students to design and build a **box girder bridge** using matboard and contact cement. Our goal was to maximize strength-to-weight ratio and withstand the highest possible load under realistic failure constraints.
 
 > 🏆 **Our bridge supported over 1000N (1kN) — the highest among 300+ competing students.**
 
